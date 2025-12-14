@@ -1,9 +1,43 @@
 
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 
-http://127.0.0.1:8000/health/env  ---环境检查
-http://127.0.0.1:8000/action/qvx_max_and_top   -- 置顶并最大化
-http://127.0.0.1:8000/action/send   -- 发送消息动作（加了仿真）
+http://127.0.0.1:8000/health/env  ---GET   环境检查
+http://127.0.0.1:8000/action/qvx_max_and_top   --POST 置顶并最大化
+http://127.0.0.1:8000/action/send   -- POST 发送消息动作（加了仿真）
+
+
+
+GET /health/env
+
+输入：无
+输出：JSON：{ ok: bool, detail: object, screenshot_url: "/health/screenshot" }
+作用：做环境自检（操作系统/分辨率/企微状态等），用于确认服务是否具备可运行条件
+GET /health/screenshot
+
+输入：无
+输出：image/png（桌面实时截图文件流，带禁缓存头）
+作用：获取当前桌面截图，便于远程查看“此刻屏幕画面”用于排查定位/界面状态
+POST /action/qvx_max_and_top
+
+输入：无
+输出：JSON：{ success: true, screenshot: string, window: object }；失败返回 500 + detail
+作用：将企业微信窗口激活、最大化并置顶，并返回一次截图和窗口信息
+POST /action/send
+
+输入：无
+输出：JSON：{ success: true, screenshot: string, debug: object }；失败返回 500 + detail: { message, debug }
+作用：发送消息动作（当前实现是：聚焦输入框并点击发送按钮；优先用内存缓存坐标，缺失才截图+模板匹配）
+GET /debug/windows/wecom
+
+输入：无
+输出：JSON：包含候选窗口列表（hwnd/title/pid/rect/是否前台/是否最大化/是否置顶等）
+作用：调试用，查看当前系统里识别到的企微窗口候选情况
+GET /debug/context
+
+输入：无
+输出：JSON：运行时上下文快照：p_screen_size、l_screen_size、input_center_position、send_button_position、meta
+作用：调试用，查看守护线程与定位缓存是否正常更新、最近错误等
+
 
 我要给RPA开发一些http后台接口，用于操控企业微信
 写代码前，我先表达下我的偏好

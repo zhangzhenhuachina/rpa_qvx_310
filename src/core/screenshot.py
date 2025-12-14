@@ -1,11 +1,9 @@
 import os
-from datetime import datetime
 from typing import Optional
 
 
 def _default_path() -> str:
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return os.path.join("artifacts", "screenshots", f"desktop_{timestamp}.png")
+    return os.path.join("artifacts", "screenshots", "desktop_latest.png")
 
 
 def ensure_folder(path: str) -> None:

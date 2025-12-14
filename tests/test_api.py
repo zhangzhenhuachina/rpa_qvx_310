@@ -59,7 +59,8 @@ class ApiTest(unittest.TestCase):
     @patch("src.api.main.SendMessageAction")
     def test_send_action_success(self, mock_action_cls):
         mock_action = MagicMock()
-        mock_action.execute.return_value = (True, "after.png")
+        mock_action.execute.return_value = (True, "after.png", None)
+        mock_action.last_debug = {"ok": True}
         mock_action_cls.return_value = mock_action
 
         client = TestClient(app)
@@ -69,12 +70,14 @@ class ApiTest(unittest.TestCase):
         data = response.json()
         self.assertTrue(data["success"])
         self.assertEqual(data["screenshot"], "after.png")
+        self.assertTrue(data["debug"]["ok"])
 
     # 负向：发送动作失败，返回 500
     @patch("src.api.main.SendMessageAction")
     def test_send_action_fail(self, mock_action_cls):
         mock_action = MagicMock()
-        mock_action.execute.return_value = (False, None)
+        mock_action.execute.return_value = (False, None, "发送失败")
+        mock_action.last_debug = {"ok": False}
         mock_action_cls.return_value = mock_action
 
         client = TestClient(app)
@@ -82,6 +85,24 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertIn("发送失败", response.text)
+
+    def test_guard_status_endpoint(self):
+        client = TestClient(app)
+        response = client.get("/debug/guard/status")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("running", data)
+
+    def test_guard_start_stop_endpoints(self):
+        client = TestClient(app)
+
+        response = client.post("/debug/guard/start", json={"interval_sec": 0.5, "locate_interval_sec": 2.0})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
+
+        response = client.post("/debug/guard/stop")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["success"])
 
     # 正向：最大化置顶成功，返回 success 与截图路径
     @patch("src.api.main.system_info.detect_enterprise_wechat_status", return_value="已安装-启动")
