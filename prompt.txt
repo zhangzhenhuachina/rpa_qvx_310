@@ -1,3 +1,10 @@
+
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+
+http://127.0.0.1:8000/health/env  ---环境检查
+http://127.0.0.1:8000/action/qvx_max_and_top   -- 置顶并最大化
+http://127.0.0.1:8000/action/send   -- 发送消息动作（加了仿真）
+
 我要给RPA开发一些http后台接口，用于操控企业微信
 写代码前，我先表达下我的偏好
 a. 需要用中文给我交互

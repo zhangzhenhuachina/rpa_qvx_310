@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -21,6 +23,37 @@ class ApiTest(unittest.TestCase):
         data = response.json()
         self.assertTrue(data["ok"])
         self.assertEqual(data["detail"]["操作系统类型"], "win10")
+        self.assertEqual(data["screenshot_url"], "/health/screenshot")
+
+    @patch("src.api.main.capture_desktop")
+    def test_health_screenshot_ok(self, mock_capture_desktop):
+        fd, path = tempfile.mkstemp(suffix=".png")
+        try:
+            os.write(fd, b"\x89PNG\r\n\x1a\n")
+            os.close(fd)
+
+            mock_capture_desktop.return_value = path
+
+            client = TestClient(app)
+            response = client.get("/health/screenshot")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers["content-type"], "image/png")
+            self.assertIn("no-store", response.headers.get("cache-control", ""))
+            self.assertEqual(response.content[:8], b"\x89PNG\r\n\x1a\n")
+        finally:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
+    @patch("src.api.main.capture_desktop")
+    def test_health_screenshot_fail(self, mock_capture_desktop):
+        mock_capture_desktop.return_value = None
+        client = TestClient(app)
+        response = client.get("/health/screenshot")
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("截图失败", response.text)
 
     # 正向：发送动作成功，返回 success 和截图路径
     @patch("src.api.main.SendMessageAction")
@@ -51,10 +84,11 @@ class ApiTest(unittest.TestCase):
         self.assertIn("发送失败", response.text)
 
     # 正向：最大化置顶成功，返回 success 与截图路径
+    @patch("src.api.main.system_info.detect_enterprise_wechat_status", return_value="已安装-启动")
     @patch("src.api.main.MaxAndTopAction")
-    def test_max_and_top_success(self, mock_action_cls):
+    def test_max_and_top_success(self, mock_action_cls, _mock_status):
         mock_action = MagicMock()
-        mock_action.execute.return_value = (True, "max.png")
+        mock_action.execute.return_value = (True, "max.png", None)
         mock_action_cls.return_value = mock_action
 
         client = TestClient(app)
@@ -66,10 +100,11 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(data["screenshot"], "max.png")
 
     # 负向：最大化置顶失败，返回 500
+    @patch("src.api.main.system_info.detect_enterprise_wechat_status", return_value="已安装-启动")
     @patch("src.api.main.MaxAndTopAction")
-    def test_max_and_top_fail(self, mock_action_cls):
+    def test_max_and_top_fail(self, mock_action_cls, _mock_status):
         mock_action = MagicMock()
-        mock_action.execute.return_value = (False, None)
+        mock_action.execute.return_value = (False, None, "置顶失败 hwnd=1")
         mock_action_cls.return_value = mock_action
 
         client = TestClient(app)
@@ -77,3 +112,10 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 500)
         self.assertIn("置顶失败", response.text)
+
+    @patch("src.api.main.system_info.detect_enterprise_wechat_status", return_value="已安装-未启动")
+    def test_max_and_top_not_ready(self, _mock_status):
+        client = TestClient(app)
+        response = client.post("/action/qvx_max_and_top")
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("企业微信未安装，或者未启动，需要手动启动", response.text)

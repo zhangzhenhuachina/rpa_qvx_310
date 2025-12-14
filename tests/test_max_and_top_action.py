@@ -18,15 +18,19 @@ class FakeController:
 
     def find_window(self):
         self.called.append("find")
-        return self.handle
+        return self.handle, ["dummy"]
 
     def activate_and_maximize(self, hwnd: int):
         self.called.append(f"activate:{hwnd}")
-        return self.activate_ok
+        if self.activate_ok:
+            return True, None
+        return False, "activate failed"
 
     def set_topmost(self, hwnd: int):
         self.called.append(f"top:{hwnd}")
-        return self.top_ok
+        if self.top_ok:
+            return True, None
+        return False, "topmost failed"
 
 
 class MaxAndTopActionTest(unittest.TestCase):
@@ -36,10 +40,11 @@ class MaxAndTopActionTest(unittest.TestCase):
         controller = FakeController(handle=10, activate_ok=True, top_ok=True)
         action = MaxAndTopAction(controller=controller, shot_dir="artifacts")
 
-        success, shot = action.execute()
+        success, shot, error = action.execute()
 
         self.assertTrue(success)
         self.assertEqual(shot, "shot.png")
+        self.assertIsNone(error)
         self.assertIn("find", controller.called[0])
 
     # 负向：未找到窗口时直接失败
@@ -48,10 +53,11 @@ class MaxAndTopActionTest(unittest.TestCase):
         controller = FakeController(handle=None)
         action = MaxAndTopAction(controller=controller, shot_dir="artifacts")
 
-        success, shot = action.execute()
+        success, shot, error = action.execute()
 
         self.assertFalse(success)
         self.assertIsNone(shot)
+        self.assertIsNotNone(error)
 
     # 负向：置顶失败时返回失败
     @patch("src.actions.max_and_top_action.capture_desktop", return_value="shot.png")
@@ -59,10 +65,11 @@ class MaxAndTopActionTest(unittest.TestCase):
         controller = FakeController(handle=5, activate_ok=True, top_ok=False)
         action = MaxAndTopAction(controller=controller, shot_dir="artifacts")
 
-        success, shot = action.execute()
+        success, shot, error = action.execute()
 
         self.assertFalse(success)
         self.assertIsNone(shot)
+        self.assertIsNotNone(error)
 
 
 if __name__ == "__main__":
