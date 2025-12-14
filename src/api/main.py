@@ -11,6 +11,7 @@ from src.actions.send_message_action import SendMessageAction
 from src.core import system_info
 from src.core.screenshot import capture_desktop
 from src.env_check.env_checker import EnvChecker
+from src.actions.max_and_top_action import WindowController
 
 
 def create_app() -> FastAPI:
@@ -69,12 +70,18 @@ def create_app() -> FastAPI:
                 detail="企业微信未安装，或者未启动，需要手动启动",
             )
 
-        success, screenshot, error = MaxAndTopAction().execute()
+        action = MaxAndTopAction()
+        success, screenshot, error = action.execute()
         if not success:
             logger.error("Max and top action failed error=%s", error)
             raise HTTPException(status_code=500, detail=error or "置顶失败")
         logger.info("Max and top action succeeded screenshot=%s", screenshot)
-        return {"success": True, "screenshot": screenshot}
+        return {"success": True, "screenshot": screenshot, "window": action.last_window_info}
+
+    @app.get("/debug/windows/wecom")
+    def debug_wecom_windows():
+        """调试：列出当前识别到的企微窗口候选（hwnd/title/pid/rect/是否前台/最大化/置顶）。"""
+        return WindowController().list_matching_windows()
 
     @app.post("/action/send")
     def send_message():

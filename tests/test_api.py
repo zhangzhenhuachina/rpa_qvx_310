@@ -89,6 +89,7 @@ class ApiTest(unittest.TestCase):
     def test_max_and_top_success(self, mock_action_cls, _mock_status):
         mock_action = MagicMock()
         mock_action.execute.return_value = (True, "max.png", None)
+        mock_action.last_window_info = {"hwnd": 1}
         mock_action_cls.return_value = mock_action
 
         client = TestClient(app)
@@ -98,6 +99,7 @@ class ApiTest(unittest.TestCase):
         data = response.json()
         self.assertTrue(data["success"])
         self.assertEqual(data["screenshot"], "max.png")
+        self.assertEqual(data["window"]["hwnd"], 1)
 
     # 负向：最大化置顶失败，返回 500
     @patch("src.api.main.system_info.detect_enterprise_wechat_status", return_value="已安装-启动")
