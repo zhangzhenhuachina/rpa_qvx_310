@@ -17,7 +17,7 @@ class EnvChecker:
         os_label = system_info.get_os_label()
         screen_resolution = system_info.get_screen_resolution()
         wechat_status = system_info.detect_enterprise_wechat_status()
-        screenshot_location = capture_desktop(self.screenshot_path)
+        screenshot_location = capture_desktop(self.screenshot_path) if self.screenshot_path else None
 
         os_supported = self._is_os_supported(os_label)
         wechat_ok = wechat_status == "已安装-启动"

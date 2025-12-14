@@ -30,6 +30,8 @@ class RuntimeContext:
             "last_guard_tick_at": None,
             "last_locate_at": None,
             "last_max_top_at": None,
+            "last_locate_screenshot": None,
+            "last_locate_annotated_screenshot": None,
             "last_error": None,
         }
 
@@ -57,6 +59,8 @@ class RuntimeContext:
         send_button_position: Optional[Point] = None,
         *,
         located_at: Optional[float] = None,
+        locate_screenshot: Optional[str] = None,
+        locate_annotated_screenshot: Optional[str] = None,
     ) -> None:
         with self._lock:
             if input_center_position:
@@ -65,6 +69,10 @@ class RuntimeContext:
                 self._send_button_position = send_button_position
             if located_at is not None:
                 self._meta["last_locate_at"] = float(located_at)
+            if locate_screenshot is not None:
+                self._meta["last_locate_screenshot"] = locate_screenshot
+            if locate_annotated_screenshot is not None:
+                self._meta["last_locate_annotated_screenshot"] = locate_annotated_screenshot
             self._meta["updated_at"] = time.time()
 
     def mark_guard_tick(self, *, tick_at: Optional[float] = None) -> None:
@@ -84,4 +92,3 @@ class RuntimeContext:
 
 
 runtime_context = RuntimeContext()
-

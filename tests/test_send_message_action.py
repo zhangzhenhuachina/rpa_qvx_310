@@ -36,11 +36,15 @@ class FakeLocator:
             reason=None if bbox else "no_match",
         )
 
+    def locate_many(self, targets, *, screenshot_path=None, annotated_path=None):
+        return {t: self.locate(t) for t in targets}
+
 
 class FakeSimulator:
     def __init__(self) -> None:
         self.pressed = False
         self.clicked = False
+        self.click_points = []
 
     def press_alt_s(self) -> None:
         self.pressed = True
@@ -48,6 +52,7 @@ class FakeSimulator:
     def move_and_click(self, x: int, y: int) -> None:
         self.clicked = True
         self.click_point = (x, y)
+        self.click_points.append((x, y))
 
 
 class SendMessageActionTest(unittest.TestCase):
@@ -73,29 +78,9 @@ class SendMessageActionTest(unittest.TestCase):
         self.assertEqual(shot, "after.png")
         self.assertIsNone(error)
 
-    # 正向：未找到发送按钮，回退 ALT+S
-    @patch("src.actions.send_message_action.capture_desktop", return_value="after.png")
-    def test_fallback_alt_s(self, _mock_capture):
-        locator = FakeLocator(input_bbox=BBox(0, 0, 10, 10), send_bbox=None)
-        simulator = FakeSimulator()
-        action = SendMessageAction(
-            locator=locator,
-            simulator=simulator,
-            after_shot_dir="artifacts",
-            context=RuntimeContext(),
-        )
-
-        success, shot, error = action.execute()
-
-        self.assertTrue(success)
-        self.assertTrue(simulator.clicked)
-        self.assertTrue(simulator.pressed)
-        self.assertEqual(shot, "after.png")
-        self.assertIsNone(error)
-
-    # 负向：找不到输入框，直接失败
+    # 负向：找不到发送按钮，直接失败
     @patch("src.actions.send_message_action.capture_desktop", return_value=None)
-    def test_fail_when_input_missing(self, _mock_capture):
+    def test_fail_when_send_missing(self, _mock_capture):
         locator = FakeLocator(input_bbox=None, send_bbox=None)
         simulator = FakeSimulator()
         action = SendMessageAction(
@@ -133,6 +118,28 @@ class SendMessageActionTest(unittest.TestCase):
         self.assertEqual(locator.calls, [])
         self.assertEqual(shot, "after.png")
         self.assertIsNone(error)
+
+    @patch("src.actions.send_message_action.capture_desktop", return_value="after.png")
+    def test_input_from_send_button_offset(self, _mock_capture):
+        locator = FakeLocator(
+            input_bbox=None,
+            send_bbox=BBox(1000, 900, 100, 40),
+        )
+        simulator = FakeSimulator()
+        context = RuntimeContext()
+        action = SendMessageAction(locator=locator, simulator=simulator, after_shot_dir="artifacts", context=context)
+
+        success, shot, error = action.execute()
+
+        self.assertTrue(success)
+        self.assertEqual(shot, "after.png")
+        self.assertIsNone(error)
+        # 至少会点击一次（聚焦输入框），且坐标应来自“发送按钮中心点 + 偏移”
+        self.assertTrue(simulator.clicked)
+        # 第一次点击应是聚焦输入框（蓝框中心点）
+        self.assertGreaterEqual(len(simulator.click_points), 1)
+        # send_bbox 左上角(1000,900) 宽=100 高=40 => 蓝框宽=200，高=40，左上=(800,900) => center=(900,920)
+        self.assertEqual(simulator.click_points[0], (900, 920))
 
 
 if __name__ == "__main__":

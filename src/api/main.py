@@ -7,6 +7,9 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+import threading
+import time
+import shutil
 
 from src.actions.max_and_top_action import MaxAndTopAction
 from src.actions.send_message_action import SendMessageAction
@@ -18,6 +21,7 @@ from src.env_check.env_checker import EnvChecker
 from src.actions.max_and_top_action import WindowController
 from src.api.logging_config import setup_logging
 from src.settings import WECOM_GUARD_ENABLED, WECOM_GUARD_INTERVAL_SEC, WECOM_GUARD_LOCATE_INTERVAL_SEC
+from src.qvx_position.locator import PositionLocator
 
 
 class GuardConfig(BaseModel):
@@ -31,8 +35,40 @@ def create_app() -> FastAPI:
     app = FastAPI(title="WeCom RPA API", version="0.1.0")
     logger = logging.getLogger(__name__)
 
+    def _startup_locate_snapshot() -> None:
+        locate_screenshot = os.path.join("artifacts", "screenshots", "locate.png")
+        locate_annotated = os.path.join("artifacts", "screenshots", "locate_annotated.png")
+
+        shot = capture_desktop(locate_screenshot)
+        if not shot:
+            runtime_context.set_last_error("startup_capture_failed")
+            return
+
+        try:
+            PositionLocator().locate_many(
+                ["消息输入框", "消息发送按钮"],
+                screenshot_path=locate_screenshot,
+                annotated_path=locate_annotated,
+            )
+        except Exception as exc:
+            # 没有 opencv / 依赖缺失时，至少保证两张图存在
+            try:
+                shutil.copyfile(locate_screenshot, locate_annotated)
+            except Exception:
+                pass
+            runtime_context.set_last_error(f"startup_locate_failed: {type(exc).__name__}: {exc}")
+        finally:
+            runtime_context.update_positions(
+                located_at=time.time(),
+                locate_screenshot=locate_screenshot,
+                locate_annotated_screenshot=locate_annotated,
+            )
+
     @app.on_event("startup")
     def startup():
+        # 启动即生成 locate.png / locate_annotated.png（覆盖最新）
+        threading.Thread(target=_startup_locate_snapshot, name="startup-locate", daemon=True).start()
+
         if not WECOM_GUARD_ENABLED:
             return
         guard = WeComGuard(
@@ -100,10 +136,11 @@ def create_app() -> FastAPI:
         返回当前桌面截图（image/png），用于在浏览器里查看“最实时”的截图。
         注意：该截图发生在本请求处理期间，并通过禁止缓存头确保每次刷新都拿到新图。
         """
-        target_path = os.path.join("artifacts", "screenshots", "health.png")
+        target_path = os.path.join("artifacts", "screenshots", "locate.png")
         screenshot_path = capture_desktop(target_path)
         if not screenshot_path:
-            raise HTTPException(status_code=500, detail="截图失败")
+            logger.error("health_screenshot failed capture_desktop target_path=%s", target_path)
+            raise HTTPException(status_code=500, detail="截图失败（请查看 artifacts/logs/api.log 里的 capture_desktop failed）")
 
         return FileResponse(
             screenshot_path,

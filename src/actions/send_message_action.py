@@ -1,10 +1,12 @@
 import logging
 import os
-from datetime import datetime
+import time
 from typing import Any, Dict, Optional, Tuple
 
+from src.core.annotate import draw_rect
 from src.core.screenshot import capture_desktop
 from src.core.runtime_context import RuntimeContext, runtime_context
+from src.core.screenshot import CAPTURE_LOCK
 from src.qvx_position.locator import PositionLocator
 from src.settings import SCREEN_SEND_MSG_AFTER
 
@@ -54,20 +56,88 @@ class SendMessageAction:
 
         snap = self.context.snapshot()
         input_center = snap.input_center_position
-        if input_center:
-            debug["steps"].append({"focus_input_cached": {"x": input_center[0], "y": input_center[1]}})
-        else:
-            input_loc = self.locator.locate("消息输入框")
-            debug["steps"].append({"locate_input": input_loc.to_dict()})
-            if not input_loc.bbox:
-                self.last_debug = debug
-                logger.error("SendMessageAction failed: input box not found debug=%s", debug)
-                return False, None, f"未定位到消息输入框（{input_loc.reason}）"
-            input_center = (
-                int(input_loc.bbox.x + input_loc.bbox.width // 2),
-                int(input_loc.bbox.y + input_loc.bbox.height // 2),
+        send_center = snap.send_button_position
+        if input_center and send_center:
+            debug["steps"].append(
+                {
+                    "use_cached_positions": {
+                        "input": {"x": input_center[0], "y": input_center[1]},
+                        "send": {"x": send_center[0], "y": send_center[1]},
+                    }
+                }
             )
-            self.context.update_positions(input_center_position=input_center, located_at=datetime.now().timestamp())
+        else:
+            locate_screenshot = os.path.join("artifacts", "screenshots", "locate.png")
+            locate_annotated = os.path.join("artifacts", "screenshots", "locate_annotated.png")
+            with CAPTURE_LOCK:
+                results = self.locator.locate_many(
+                    ["消息发送按钮"],
+                    screenshot_path=locate_screenshot,
+                    annotated_path=locate_annotated,
+                )
+                send_loc = results.get("消息发送按钮")
+            if send_loc:
+                debug["steps"].append({"locate_send_button": send_loc.to_dict()})
+
+            if send_loc and send_loc.bbox:
+                send_center = (
+                    int(send_loc.bbox.x + send_loc.bbox.width // 2),
+                    int(send_loc.bbox.y + send_loc.bbox.height // 2),
+                )
+
+            if not send_center:
+                self.last_debug = debug
+                logger.error("SendMessageAction failed: send button not found debug=%s", debug)
+                return False, None, "未定位到消息发送按钮"
+
+            send_x1 = int(send_loc.bbox.x)
+            send_y1 = int(send_loc.bbox.y)
+            send_w = int(send_loc.bbox.width)
+            send_h = int(send_loc.bbox.height)
+            data_w = max(1, send_w * 2)
+            data_h = max(1, send_h)
+            # 蓝框完全在红框左侧且不重叠，并且两者连着：蓝框右边界=红框左边界
+            data_x = int(send_x1 - data_w)
+            data_y = int(send_y1)
+
+            try:
+                with CAPTURE_LOCK:
+                    draw_rect(
+                        locate_annotated,
+                        top_left=(data_x, data_y),
+                        width=data_w,
+                        height=data_h,
+                        color="blue",
+                    )
+            except Exception:
+                pass
+
+            input_center = (int(data_x + data_w // 2), int(data_y + data_h // 2))
+
+            debug["steps"].append(
+                {
+                    "input_rect_from_send_button_topleft": {
+                        "send_x": send_center[0],
+                        "send_y": send_center[1],
+                        "send_x1": send_x1,
+                        "send_y1": send_y1,
+                        "send_w": send_w,
+                        "send_h": send_h,
+                        "data_top_left": {"x": data_x, "y": data_y},
+                        "data_width": data_w,
+                        "data_height": data_h,
+                        "input_center": {"x": input_center[0], "y": input_center[1]},
+                    }
+                }
+            )
+
+            self.context.update_positions(
+                input_center_position=input_center,
+                send_button_position=send_center,
+                located_at=time.time(),
+                locate_screenshot=(send_loc.screenshot_path if send_loc else locate_screenshot),
+                locate_annotated_screenshot=(send_loc.annotated_screenshot_path if send_loc else locate_annotated),
+            )
 
         try:
             # 先点一下输入框，确保焦点在输入区
@@ -78,25 +148,17 @@ class SendMessageAction:
             logger.exception("SendMessageAction failed: focus input error=%s debug=%s", exc, debug)
             return False, None, f"点击输入框失败：{type(exc).__name__}: {exc}"
 
-        snap = self.context.snapshot()
-        send_center = snap.send_button_position
-        send_loc = None
         if not send_center:
-            send_loc = self.locator.locate("消息发送按钮")
-            debug["steps"].append({"locate_send_button": send_loc.to_dict()})
-            if send_loc.bbox:
-                send_center = (
-                    int(send_loc.bbox.x + send_loc.bbox.width // 2),
-                    int(send_loc.bbox.y + send_loc.bbox.height // 2),
-                )
-                self.context.update_positions(send_button_position=send_center, located_at=datetime.now().timestamp())
+            debug["steps"].append({"send_button_missing": True})
         try:
             if send_center:
                 self._click_point(send_center[0], send_center[1])
                 debug["steps"].append({"click_send_button": True})
+                logger.info("SendMessageAction send_method=click_send_button")
             else:
                 self.simulator.press_alt_s()
                 debug["steps"].append({"fallback_alt_s": True})
+                logger.info("SendMessageAction send_method=alt_s")
         except Exception as exc:
             self.last_debug = debug
             logger.exception("SendMessageAction failed: send action error=%s debug=%s", exc, debug)

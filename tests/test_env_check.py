@@ -21,7 +21,7 @@ class EnvCheckerTest(unittest.TestCase):
         mock_resolution.return_value = (1920, 1080)
         mock_wechat_status.return_value = "已安装-启动"
 
-        checker = EnvChecker()
+        checker = EnvChecker(screenshot_path="artifacts/screenshots/locate.png")
         minimal_ready, desc = checker.check()
 
         self.assertTrue(minimal_ready)

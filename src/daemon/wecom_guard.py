@@ -1,12 +1,15 @@
 import logging
+import os
 import threading
 import time
 from typing import Optional
 
 from src.actions.max_and_top_action import WindowController
+from src.core.annotate import draw_rect
 from src.core.runtime_context import RuntimeContext, runtime_context
 from src.core.screen_size import get_screen_size_logical, get_screen_size_physical
 from src.qvx_position.locator import PositionLocator
+from src.core.screenshot import CAPTURE_LOCK
 
 
 class WeComGuard:
@@ -111,28 +114,59 @@ class WeComGuard:
         if not should_locate:
             return
 
-        input_loc = self.locator.locate("消息输入框")
-        send_loc = self.locator.locate("消息发送按钮")
-
-        input_center = None
-        if input_loc.bbox:
-            input_center = (
-                int(input_loc.bbox.x + input_loc.bbox.width // 2),
-                int(input_loc.bbox.y + input_loc.bbox.height // 2),
+        locate_screenshot = os.path.join("artifacts", "screenshots", "locate.png")
+        locate_annotated = os.path.join("artifacts", "screenshots", "locate_annotated.png")
+        with CAPTURE_LOCK:
+            results = self.locator.locate_many(
+                ["消息发送按钮"],
+                screenshot_path=locate_screenshot,
+                annotated_path=locate_annotated,
             )
+            send_loc = results.get("消息发送按钮")
 
         send_center = None
-        if send_loc.bbox:
+        if send_loc and send_loc.bbox:
             send_center = (
                 int(send_loc.bbox.x + send_loc.bbox.width // 2),
                 int(send_loc.bbox.y + send_loc.bbox.height // 2),
             )
+
+        if not send_center:
+            logger.error("WeComGuard locate failed: send button not found")
+            self.context.set_last_error("send_button_not_found")
+            return
+
+        # 输入框数据框（蓝框）：基于发送按钮左上角(x1,y1)推算
+        send_x1 = int(send_loc.bbox.x)
+        send_y1 = int(send_loc.bbox.y)
+        send_w = int(send_loc.bbox.width)
+        send_h = int(send_loc.bbox.height)
+        data_w = max(1, send_w * 2)
+        data_h = max(1, send_h)
+        # 蓝框完全在红框左侧且不重叠，并且两者连着：蓝框右边界=红框左边界
+        data_x = int(send_x1 - data_w)
+        data_y = int(send_y1)
+        try:
+            with CAPTURE_LOCK:
+                draw_rect(
+                    locate_annotated,
+                    top_left=(data_x, data_y),
+                    width=data_w,
+                    height=data_h,
+                    color="blue",
+                )
+        except Exception:
+            pass
+
+        input_center = (int(data_x + data_w // 2), int(data_y + data_h // 2))
 
         if input_center or send_center:
             self.context.update_positions(
                 input_center_position=input_center,
                 send_button_position=send_center,
                 located_at=now_ts,
+                locate_screenshot=(send_loc.screenshot_path if send_loc else locate_screenshot),
+                locate_annotated_screenshot=(send_loc.annotated_screenshot_path if send_loc else locate_annotated),
             )
             self.context.set_last_error(None)
         else:
