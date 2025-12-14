@@ -1,0 +1,82 @@
+{
+  "_comment_profile_name": "配置名称，便于标识当前 profile",
+  "profile_name": "demo_profile",
+
+  "_comment_version": "配置版本号，自定义字符串",
+  "version": "1.0",
+
+  "_comment_random_seed": "随机种子：int 固定随机行为；null 表示每次随机",
+  "random_seed": 123,
+
+  "_comment_mouse": "鼠标相关配置，控制移动曲线与滚动节奏",
+  "_comment_mouse_min_duration": "单次移动的最短时长（秒）",
+  "_comment_mouse_max_duration": "单次移动的最长时长（秒）",
+  "_comment_mouse_jitter_radius": "轨迹点的抖动半径（像素）",
+  "_comment_mouse_jitter_chance": "每一步应用抖动的概率（0-1），调低可减少明显抖动",
+  "_comment_mouse_control_points": "贝塞尔控制点数量（>=1）",
+  "_comment_mouse_overshoot_chance": "过冲概率（0-1），先略过目标再回到目标",
+  "_comment_mouse_overshoot_radius": "过冲偏移半径（像素）",
+  "_comment_mouse_scroll_step": "滚轮每步的刻度（正负方向取决于传入值）",
+  "_comment_mouse_scroll_pause_range": "两步滚动之间的暂停范围（秒）",
+  "_comment_mouse_speed_curve": "速度曲线：linear / ease_in / ease_out / ease_in_out，控制慢-快-慢节奏",
+  "mouse": {
+    "min_duration": 0.4,
+    "max_duration": 1.0,
+    "jitter_radius": 3.0,
+    "jitter_chance": 0.2,
+    "control_points": 2,
+    "overshoot_chance": 0.2,
+    "overshoot_radius": 15.0,
+    "speed_curve": "ease_in_out",
+    "scroll_step": 2,
+    "scroll_pause_range": [0.02, 0.06]
+  },
+
+  "_comment_keyboard": "键盘打字相关配置",
+  "_comment_keyboard_min_cps": "最低打字速度（字符/秒）",
+  "_comment_keyboard_max_cps": "最高打字速度（字符/秒）",
+  "_comment_keyboard_typo_probability": "模拟打错的概率（0-1）",
+  "_comment_keyboard_correction_delay_range": "打错后退格前的延迟范围（秒）",
+  "_comment_keyboard_punctuation_pause": "标点额外停顿（秒，或作为最小值）",
+  "_comment_keyboard_punctuation_pause_chance": "触发标点停顿的概率（0-1）",
+  "_comment_keyboard_punctuation_chars": "判定为标点的字符集合",
+  "keyboard": {
+    "min_cps": 4.0,
+    "max_cps": 8.0,
+    "typo_probability": 0.05,
+    "correction_delay_range": [0.1, 0.25],
+    "punctuation_pause": 0.2,
+    "punctuation_pause_chance": 0.6,
+    "punctuation_chars": ".,;:!?\"'"
+  },
+
+  "_comment_wait": "等待与停顿配置",
+  "_comment_wait_short_range": "短暂停范围（秒）",
+  "_comment_wait_read_range": "阅读/观察暂停范围（秒）",
+  "_comment_wait_long_pause_chance": "触发长暂停的概率（0-1）",
+  "_comment_wait_long_pause_range": "长暂停范围（秒）",
+  "wait": {
+    "short_range": [0.08, 0.2],
+    "read_range": [0.6, 1.2],
+    "long_pause_chance": 0.1,
+    "long_pause_range": [1.5, 3.0]
+  },
+
+  "_comment_clipboard": "剪贴板相关配置",
+  "_comment_clipboard_restore_original": "粘贴后是否恢复原剪贴板内容",
+  "_comment_clipboard_min_copy_delay": "粘贴前/后的最小延迟（秒）",
+  "_comment_clipboard_max_copy_delay": "粘贴前/后的最大延迟（秒）",
+  "clipboard": {
+    "restore_original": true,
+    "min_copy_delay": 0.05,
+    "max_copy_delay": 0.12
+  },
+
+  "_comment_strategies": "策略选择（受 registry 白名单约束）",
+  "_comment_strategies_mouse": "鼠标策略名称，例如 bezier_v1",
+  "_comment_strategies_typing": "键盘策略名称，例如 ascii_clipboard_mix_v1",
+  "strategies": {
+    "mouse": "bezier_v1",
+    "typing": "ascii_clipboard_mix_v1"
+  }
+}
