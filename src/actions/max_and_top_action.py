@@ -208,6 +208,9 @@ class WindowController:
                 return True
 
             pid = self._get_window_pid(hwnd)
+            # 没有检测到企微进程时，不做标题兜底匹配，避免误匹配（例如 Swagger UI/浏览器标签含 wecom）。
+            if not pids:
+                return True
             pid_match = bool(pids) and pid in pids
             title_match = any(t in title_lower for t in target_titles)
             if not (pid_match or title_match):
@@ -283,6 +286,9 @@ class WindowController:
                 seen_titles.append(title)
 
             pid = self._get_window_pid(hwnd)
+            # 没有检测到企微进程时，不做标题兜底匹配，避免误匹配（例如 Swagger UI/浏览器标签含 wecom）。
+            if not pids:
+                return True
             if pids and pid not in pids:
                 return True
 

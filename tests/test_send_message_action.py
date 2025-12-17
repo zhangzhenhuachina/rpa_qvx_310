@@ -1,4 +1,5 @@
 import os
+import math
 import unittest
 from unittest.mock import patch
 import time
@@ -139,7 +140,11 @@ class SendMessageActionTest(unittest.TestCase):
         # 第一次点击应是聚焦输入框（蓝框中心点）
         self.assertGreaterEqual(len(simulator.click_points), 1)
         # send_bbox 左上角(1000,900) 宽=100 高=40 => 蓝框宽=200，高=40，左上=(800,900) => center=(900,920)
-        self.assertEqual(simulator.click_points[0], (900, 920))
+        expected_center = (900, 920)
+        clicked = simulator.click_points[0]
+        radius = int(os.getenv("INPUT_CLICK_RADIUS_PX", "5"))
+        dist = math.hypot(clicked[0] - expected_center[0], clicked[1] - expected_center[1])
+        self.assertLessEqual(dist, radius)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,12 @@
 import logging
 import os
+import math
+import random
 import time
 from typing import Any, Dict, Optional, Tuple
 
+from src.human.controller import HumanLikeController
+from src.human.human_like_profile import ProfileConfig
 from src.core.annotate import draw_rect
 from src.core.screenshot import capture_desktop
 from src.core.runtime_context import RuntimeContext, runtime_context
@@ -18,20 +22,22 @@ class InputSimulator:
         self._impl = self._load_impl()
 
     def _load_impl(self):
-        try:
-            import pyautogui  # type: ignore
+        profile_path = os.getenv("HUMAN_PROFILE_PATH", os.path.join("src", "human", "profiles", "demo_profile.json"))
+        speed = float(os.getenv("HUMAN_MOUSE_SPEED", "1.0"))
+        if speed <= 0:
+            raise ValueError("HUMAN_MOUSE_SPEED must be > 0")
 
-            pyautogui.FAILSAFE = False
-            return pyautogui
-        except Exception as exc:
-            raise RuntimeError("未找到 pyautogui，无法执行仿真输入") from exc
+        profile = ProfileConfig.from_json_file(profile_path)
+        # speed>1 => move faster => shorter duration; speed<1 => slower => longer duration.
+        profile.mouse.min_duration = max(0.001, float(profile.mouse.min_duration) / speed)
+        profile.mouse.max_duration = max(profile.mouse.min_duration, float(profile.mouse.max_duration) / speed)
+        return HumanLikeController(profile)
 
     def press_alt_s(self) -> None:
-        self._impl.hotkey("alt", "s")
+        self._impl.press_hotkey("alt", "s")
 
     def move_and_click(self, x: int, y: int) -> None:
-        self._impl.moveTo(x, y)
-        self._impl.click()
+        self._impl.move_and_click(int(x), int(y))
 
 
 class SendMessageAction:
@@ -141,8 +147,15 @@ class SendMessageAction:
 
         try:
             # 先点一下输入框，确保焦点在输入区
-            self._click_point(input_center[0], input_center[1])
-            debug["steps"].append({"focus_input": {"x": input_center[0], "y": input_center[1]}})
+            click_x, click_y = self._click_input_center_with_jitter(input_center[0], input_center[1])
+            debug["steps"].append(
+                {
+                    "focus_input": {
+                        "center": {"x": input_center[0], "y": input_center[1]},
+                        "click": {"x": click_x, "y": click_y},
+                    }
+                }
+            )
         except Exception as exc:
             self.last_debug = debug
             logger.exception("SendMessageAction failed: focus input error=%s debug=%s", exc, debug)
@@ -177,6 +190,19 @@ class SendMessageAction:
 
     def _click_point(self, x: int, y: int) -> None:
         self.simulator.move_and_click(int(x), int(y))
+
+    def _click_input_center_with_jitter(self, center_x: int, center_y: int) -> Tuple[int, int]:
+        radius = int(os.getenv("INPUT_CLICK_RADIUS_PX", "5"))
+        if radius <= 0:
+            self._click_point(center_x, center_y)
+            return int(center_x), int(center_y)
+
+        angle = random.uniform(0.0, 2.0 * math.pi)
+        r = radius * math.sqrt(random.uniform(0.0, 1.0))
+        x = int(round(center_x + math.cos(angle) * r))
+        y = int(round(center_y + math.sin(angle) * r))
+        self._click_point(x, y)
+        return x, y
 
     def _save_after_screenshot(self) -> Optional[str]:
         os.makedirs(self.after_shot_dir, exist_ok=True)
